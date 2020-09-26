@@ -11,29 +11,39 @@ type ObjectOption func(config *OptionConfig)
 // WithACL Object 的 ACL 可选参数
 func WithACL(acl ACL) ObjectOption {
 	return func(config *OptionConfig) {
-		config.acl = acl
+		config.ACL = acl
 	}
 }
 
 // WithStorage Object 的 Storage 可选参数
 func WithStorage(storage Storage) ObjectOption {
 	return func(config *OptionConfig) {
-		config.storage = storage
+		config.Storage = storage
 	}
 }
 
 // WithRedundancyType Object 的 DataRedundancyTypoe 可选参数
 func WithRedundancyType(redundancyType DataRedundancyType) ObjectOption {
 	return func(config *OptionConfig) {
-		config.redundancyType = redundancyType
+		config.RedundancyType = redundancyType
 	}
 }
 
 // OptionConfig Object 相关的配置参数
 type OptionConfig struct {
-	acl            ACL
-	storage        Storage
-	redundancyType DataRedundancyType
+	ACL            ACL
+	Storage        Storage
+	RedundancyType DataRedundancyType
+}
+
+// DefaultOptionConfig 获取 Object 的默认配置
+func DefaultOptionConfig() (config *OptionConfig) {
+	config = &OptionConfig{
+		ACL:            PublicRead,
+		Storage:        Standard,
+		RedundancyType: LRS,
+	}
+	return
 }
 
 // ACL Bucket 的读写访问权限
