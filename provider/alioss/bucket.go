@@ -47,6 +47,18 @@ func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...p
 	return
 }
 
+// DeleteObject 删除 Object
+func (bucket *Bucket) DeleteObject(objectKey string) (err error) {
+	err = bucket.aliBucket.DeleteObject(objectKey)
+	return
+}
+
+// IsObjectExist 判断 Object 是否存在
+func (bucket *Bucket) IsObjectExist(objectKey string) (isExist bool, err error) {
+	isExist, err = bucket.aliBucket.IsObjectExist(objectKey)
+	return
+}
+
 // ToAliACL 把 provider.ACL 转化为 oss.ACLType
 func toAliACL(acl provider.ACL) (ossACL oss.ACLType, err error) {
 	switch acl {

@@ -3,6 +3,8 @@ package provider
 // Bucket OBS 服务供应商的 bucket 接口，用于提供对象存储功能
 type Bucket interface {
 	PutObjectFromFile(objectKey, filePath string, options ...ObjectOption) (err error)
+	DeleteObject(objectKey string) (err error)
+	IsObjectExist(objectKey string) (isExist bool, err error)
 }
 
 // ObjectOption Bucket 相关的可选参数

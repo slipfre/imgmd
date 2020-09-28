@@ -71,3 +71,9 @@ func (client *Client) GetOrCreateBucket(bucketName string, options ...provider.O
 	providerBucket = NewBucket(aliBucket)
 	return
 }
+
+// DeleteBucket 删除 Bucket, 只有 Bucket 为 empty 时可以删除
+func (client *Client) DeleteBucket(bucketName string) (err error) {
+	err = client.aliOSSClient.DeleteBucket(bucketName)
+	return
+}

@@ -4,5 +4,6 @@ package provider
 type Client interface {
 	IsBucketExist(bucketName string) (isExist bool, err error)
 	CreateBucket(bucketName string, options ...ObjectOption) (err error)
-	GetOrCreateBucket(bucketName string, options ...ObjectOption) (bucket *Bucket, err error)
+	GetOrCreateBucket(bucketName string, options ...ObjectOption) (bucket Bucket, err error)
+	DeleteBucket(bucketName string) (err error)
 }
