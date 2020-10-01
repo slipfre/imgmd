@@ -16,7 +16,7 @@ func TestClient_CreateBucketAndIsExistAndDelete(t *testing.T) {
 	client, err := getClient()
 	require.Nil(t, err)
 
-	testClientBucketName := "test_oss_client"
+	testClientBucketName := "test-oss-client"
 
 	isExist, err := client.IsBucketExist(testClientBucketName)
 	require.Nil(t, err)
@@ -53,10 +53,10 @@ func TestClient_GetOrCreateBucket(t *testing.T) {
 	client, err := getClient()
 	require.Nil(t, err)
 
-	testClientGetOrCreateBucket := "test_client_get_or_create_bucket"
+	testClientGetOrCreateBucket := "test-client-get-or-create-bucket"
 
 	isExist, err := client.IsBucketExist(testClientGetOrCreateBucket)
-	require.Nil(t, isExist)
+	require.Nil(t, err)
 	require.Falsef(t, isExist, "Bucket %s should not exist", testClientGetOrCreateBucket)
 
 	_, err = client.GetOrCreateBucket(
@@ -72,7 +72,7 @@ func TestClient_GetOrCreateBucket(t *testing.T) {
 		provider.WithStorage(provider.Standard),
 		provider.WithRedundancyType(provider.LRS),
 	)
-	require.NotNil(t, err)
+	require.Nil(t, err)
 
 	isExist, err = client.IsBucketExist(testClientGetOrCreateBucket)
 	require.Nil(t, err)

@@ -37,7 +37,7 @@ func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...p
 	if err != nil {
 		return
 	}
-	bucket.aliBucket.PutObjectFromFile(
+	err = bucket.aliBucket.PutObjectFromFile(
 		objectKey,
 		filePath,
 		oss.ObjectACL(aliACL),
