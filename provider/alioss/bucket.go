@@ -2,6 +2,7 @@ package alioss
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/slipfre/imgmd/provider"
@@ -20,7 +21,7 @@ func NewBucket(bucket *oss.Bucket) *Bucket {
 }
 
 // PutObjectFromFile 上传本地文件
-func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...provider.ObjectOption) (err error) {
+func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...provider.ObjectOption) (url string, err error) {
 	objectConfig := provider.DefaultOptionConfig()
 	for _, option := range options {
 		option(objectConfig)
@@ -43,6 +44,15 @@ func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...p
 		oss.ObjectACL(aliACL),
 		oss.StorageClass(aliStorageClass),
 		oss.RedundancyType(aliRedundancyType),
+	)
+	if err != nil {
+		return
+	}
+	url = fmt.Sprintf(
+		"http://%s.%s/%s",
+		bucket.aliBucket.BucketName,
+		bucket.aliBucket.GetConfig().Endpoint,
+		objectKey,
 	)
 	return
 }

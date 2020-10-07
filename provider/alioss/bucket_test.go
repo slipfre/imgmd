@@ -39,7 +39,7 @@ func TestBucket_PutAndRemoveObject(t *testing.T) {
 	require.Nil(t, err)
 	require.Falsef(t, isExist, "Object %s should not exist", testObjectKeyName)
 
-	err = bucket.PutObjectFromFile(
+	url, err := bucket.PutObjectFromFile(
 		testObjectKeyName,
 		localFilePath,
 		provider.WithACL(provider.PublicRead),
@@ -47,6 +47,7 @@ func TestBucket_PutAndRemoveObject(t *testing.T) {
 		provider.WithStorage(provider.Standard),
 	)
 	require.Nil(t, err)
+	require.NotNil(t, url)
 
 	isExist, err = bucket.IsObjectExist(testObjectKeyName)
 	require.Nil(t, err)
