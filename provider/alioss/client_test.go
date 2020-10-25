@@ -8,7 +8,7 @@ import (
 )
 
 func getClient() (client provider.Client, err error) {
-	client, err = NewClient(testEndpoint, testAKID, testAKS)
+	client, err = NewClient(TestEndpoint, TestAKID, TestAKS)
 	return
 }
 

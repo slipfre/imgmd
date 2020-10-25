@@ -6,20 +6,22 @@ import (
 )
 
 var (
-	testAKID       string
-	testAKS        string
-	testEndpoint   string
-	testBucketName string
+	TestAKID       string
+	TestAKS        string
+	TestEndpoint   string
+	TestBucketName string
+	TestImgPath    string
 )
 
 func TestMain(m *testing.M) {
-	testAKID = os.Getenv("AKID")
-	testAKS = os.Getenv("AKS")
-	testEndpoint = os.Getenv("Endpoint")
-	testBucketName = os.Getenv("BucketName")
+	TestAKID = os.Getenv("AKID")
+	TestAKS = os.Getenv("AKS")
+	TestEndpoint = os.Getenv("Endpoint")
+	TestBucketName = os.Getenv("BucketName")
+	TestImgPath = "../../resources/icon_markdown.png"
 
 	// 本地获取环境变量为空不执行穿透测试
-	if testAKID != "" {
+	if TestAKID != "" {
 		code := m.Run()
 		os.Exit(code)
 	}

@@ -25,7 +25,7 @@ func cleanBucket(client provider.Client, bucketName string) (err error) {
 func TestBucket_PutAndRemoveObject(t *testing.T) {
 	testObjectKeyName := "test/test-bucket-put-and-remove-object-object"
 	testBucketName := "test-bucket-put-and-remove-object-bucket"
-	localFilePath := "C:\\Users\\Happy\\Desktop\\Resources\\griddle.png"
+	localFilePath := TestImgPath
 
 	client, err := getClient()
 	require.Nil(t, err)
