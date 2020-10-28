@@ -12,12 +12,12 @@ import (
 func TestLeafFile(t *testing.T) {
 	var collectableFile CollectableFileOperator
 
-	collectableFile, err := NewLeafFile("", testImgPath)
-	require.Nil(t, err)
+	collectableFile = NewLeafFile("", testImgPath)
+	require.Nil(t, collectableFile.FileError())
 	require.Equal(t, "", collectableFile.GetParent())
 	require.Equal(t, Standalone, collectableFile.GetFileType())
-	// TODO: adjust the uri to absolute?
-	require.Equal(t, testImgPath, collectableFile.GetURI())
+	absTestImgPath, _ := filepath.Abs(testImgPath)
+	require.Equal(t, absTestImgPath, collectableFile.GetURI())
 
 	dependencies, err := collectableFile.FindDependencies()
 	require.Nil(t, err)
@@ -37,8 +37,8 @@ func TestLeafFile(t *testing.T) {
 func TestMarkdownFile(t *testing.T) {
 	var collectableFile CollectableFileOperator
 
-	collectableFile, err := NewMarkdownFile("", testMDPath)
-	require.Nil(t, err)
+	collectableFile = NewMarkdownFile("", testMDPath)
+	require.Nil(t, collectableFile.FileError())
 	require.Equal(t, "", collectableFile.GetParent())
 	require.Equal(t, Markdown, collectableFile.GetFileType())
 

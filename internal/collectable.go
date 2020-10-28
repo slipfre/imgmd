@@ -2,9 +2,7 @@ package internal
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sync"
@@ -15,13 +13,14 @@ type FileAttributesGetter interface {
 	GetFileType() FileType
 	GetParent() string
 	GetURI() string
+	FileError() error
 }
 
 // CollectableFileOperator Files can be collected
 type CollectableFileOperator interface {
 	FileAttributesGetter
 	FindDependencies() ([]CollectableFileOperator, error)
-	ReplaceDependencyURIs(mapper URIMapper)
+	ReplaceDependencyURIs(mapper URIMapper) error
 	To(uri string) error
 }
 
@@ -45,14 +44,16 @@ type FileAttrs struct {
 	parent   string
 	uri      string
 	fileType FileType
+	err      error
 }
 
 // NewFileAttrs Create and return a FileAttrs object
-func NewFileAttrs(parent, uri string, fileType FileType) *FileAttrs {
+func NewFileAttrs(parent, uri string, fileType FileType, err error) *FileAttrs {
 	return &FileAttrs{
 		parent:   parent,
 		uri:      uri,
 		fileType: fileType,
+		err:      err,
 	}
 }
 
@@ -71,41 +72,53 @@ func (f *FileAttrs) GetFileType() FileType {
 	return f.fileType
 }
 
+// FileError Get file error if exist
+func (f *FileAttrs) FileError() error {
+	return f.err
+}
+
 // LeafFile Collectable file which has no dependencies
 type LeafFile struct {
 	*FileAttrs
 }
 
 // NewLeafFile 创建一个 StandaloneCollector，它可以 collect 没有依赖项的文件
-func NewLeafFile(parent, uri string) (*LeafFile, error) {
-	var err error
-
-	if _, err := os.Stat(uri); err != nil {
-		return nil, err
-	}
+func NewLeafFile(parent, uri string) *LeafFile {
+	reader, fError := NewFileReader(uri)
+	defer reader.Close()
 
 	if absURI, err := filepath.Abs(uri); err == nil {
-		return &LeafFile{
-			FileAttrs: NewFileAttrs(parent, absURI, Standalone),
-		}, nil
+		uri = absURI
 	}
 
-	return nil, err
+	return &LeafFile{
+		FileAttrs: NewFileAttrs(parent, uri, Standalone, fError),
+	}
 }
 
 // FindDependencies Returns all the dependencies
 func (l *LeafFile) FindDependencies() ([]CollectableFileOperator, error) {
+	if err := l.FileError(); err != nil {
+		return nil, err
+	}
+
 	dependencies := make([]CollectableFileOperator, 0)
 	return dependencies, nil
 }
 
 // ReplaceDependencyURIs Replaces all the dependencies uri in the file
-func (l *LeafFile) ReplaceDependencyURIs(mapper URIMapper) {
-	return
+func (l *LeafFile) ReplaceDependencyURIs(mapper URIMapper) error {
+	if err := l.FileError(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // To Write the file to a new place
 func (l *LeafFile) To(uri string) error {
+	if err := l.FileError(); err != nil {
+		return err
+	}
 	return DownloadFile(l.uri, uri)
 }
 
@@ -114,10 +127,8 @@ var once sync.Once
 
 // GetMarkdownImgRegex 获取编译后的正则表达式
 func GetMarkdownImgRegex() *regexp.Regexp {
-	var err error
 	once.Do(func() {
-		imgRegex, err = regexp.Compile(`(!\[[^\]\[]+\])\(([^()]+)( ".*")?\)`)
-		fmt.Print(err)
+		imgRegex, _ = regexp.Compile(`(!\[[^\]\[]+\])\(([^()]+)( ".*")?\)`)
 	})
 	return imgRegex
 }
@@ -130,24 +141,31 @@ type MarkdownFile struct {
 
 // NewMarkdownFile Create a MarkdownFile object which is a collectable file for
 // Markdown file
-func NewMarkdownFile(parent, uri string) (*MarkdownFile, error) {
-	data, err := ioutil.ReadFile(uri)
-	if err != nil {
-		return nil, err
+func NewMarkdownFile(parent, uri string) *MarkdownFile {
+	reader, err := NewFileReader(uri)
+	defer reader.Close()
+
+	var data []byte
+	if err == nil {
+		data, err = ioutil.ReadAll(reader)
 	}
 
 	if absURI, err := filepath.Abs(uri); err == nil {
-		return &MarkdownFile{
-			FileAttrs: NewFileAttrs(parent, absURI, Markdown),
-			buffer:    data,
-		}, nil
+		uri = absURI
 	}
 
-	return nil, err
+	return &MarkdownFile{
+		FileAttrs: NewFileAttrs(parent, uri, Markdown, err),
+		buffer:    data,
+	}
 }
 
 // FindDependencies Returns dependencies which are uri of imgs in the file
 func (m *MarkdownFile) FindDependencies() ([]CollectableFileOperator, error) {
+	if err := m.FileError(); err != nil {
+		return nil, err
+	}
+
 	dependencies := make([]CollectableFileOperator, 0, 3)
 
 	matchs := GetMarkdownImgRegex().FindAllSubmatch(m.buffer, -1)
@@ -157,17 +175,18 @@ func (m *MarkdownFile) FindDependencies() ([]CollectableFileOperator, error) {
 			path = filepath.Join(filepath.Dir(m.uri), path)
 		}
 
-		if dependency, err := NewLeafFile(m.uri, path); err == nil {
-			dependencies = append(dependencies, dependency)
-		} else {
-			return nil, err
-		}
+		dependencies = append(dependencies, NewLeafFile(m.uri, path))
 	}
+
 	return dependencies, nil
 }
 
 // ReplaceDependencyURIs Replace denpendency's uri in the file
-func (m *MarkdownFile) ReplaceDependencyURIs(mapper URIMapper) {
+func (m *MarkdownFile) ReplaceDependencyURIs(mapper URIMapper) error {
+	if err := m.FileError(); err != nil {
+		return err
+	}
+
 	m.buffer = GetMarkdownImgRegex().ReplaceAllFunc(
 		m.buffer,
 		func(match []byte) []byte {
@@ -176,9 +195,15 @@ func (m *MarkdownFile) ReplaceDependencyURIs(mapper URIMapper) {
 			return bytes.Replace(subMatchs[0], subMatchs[2], newURI, 1)
 		},
 	)
+
+	return nil
 }
 
 // To Write the buffer to file
 func (m *MarkdownFile) To(uri string) error {
+	if err := m.FileError(); err != nil {
+		return err
+	}
+
 	return ioutil.WriteFile(uri, m.buffer, 666)
 }
