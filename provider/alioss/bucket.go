@@ -84,7 +84,7 @@ func toAliACL(acl provider.ACL) (ossACL oss.ACLType, err error) {
 	return
 }
 
-// ToAliStorageClass 把 provider.Storage 妆化为 oss.StorageClassType
+// ToAliStorageClass 把 provider.Storage 转化为 oss.StorageClassType
 func toAliStorageClass(storage provider.Storage) (ossStorageClass oss.StorageClassType, err error) {
 	switch storage {
 	case provider.Archive:

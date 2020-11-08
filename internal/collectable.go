@@ -41,6 +41,7 @@ const (
 
 // FileAttrs Attributes of the collectable file
 type FileAttrs struct {
+	// TODO: 通过链表的形式链接起来
 	parent   string
 	uri      string
 	fileType FileType
