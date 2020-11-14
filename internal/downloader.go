@@ -16,7 +16,7 @@ func DownloadFile(srcURI, target string) (err error) {
 	}
 	defer in.Close()
 
-	out, err := os.Create(target)
+	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		return
 	}

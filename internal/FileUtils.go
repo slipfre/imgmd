@@ -5,7 +5,7 @@ import "os"
 // CreateDirectory Create directory recursively
 func CreateDirectory(dirPath string) error {
 	if !IsFileExist(dirPath) {
-		err := os.MkdirAll(dirPath, os.ModePerm)
+		err := os.MkdirAll(dirPath, 0777)
 		return err
 	}
 	return nil

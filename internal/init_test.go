@@ -6,10 +6,10 @@ import (
 )
 
 const (
-	testImgPath       string = "../resources/icon_markdown.png"
-	testImgTargetPath string = "../resources/icon_markdown_test.png"
-	testMDPath        string = "../resources/u_good_i_good.md"
-	testMDTargetPath  string = "../resources/u_good_i_good_test.md"
+	testImgPath       string = "C:/Users/Happy/Desktop/code/imgmd/resources/icon_markdown.png"
+	testImgTargetPath string = "C:/Users/Happy/Desktop/code/imgmd/resources/icon_markdown_test.png"
+	testMDPath        string = "C:/Users/Happy/Desktop/code/imgmd/resources/u_good_i_good.md"
+	testMDTargetPath  string = "C:/Users/Happy/Desktop/code/imgmd/resources/u_good_i_good_test.md"
 	testHTTPSrcURI    string = "http://testsdaf.oss-cn-hangzhou.aliyuncs.com/griddle.png"
 )
 

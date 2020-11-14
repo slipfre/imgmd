@@ -2,6 +2,8 @@ package internal
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
@@ -207,4 +209,68 @@ func (m *MarkdownFile) To(uri string) error {
 	}
 
 	return ioutil.WriteFile(uri, m.buffer, 666)
+}
+
+type cancelCollectableFile struct {
+	*FileAttrs
+	collectableFile CollectableFileOperator
+	cancelCtx       context.Context
+}
+
+// WithCancel Returns a CollectableFileOperator which maybe be cancelled due to the context
+func WithCancel(ctx context.Context, cf CollectableFileOperator) (CollectableFileOperator, error) {
+	if ctx == nil {
+		err := errors.New("ctx should not be nil")
+		return nil, err
+	}
+
+	return &cancelCollectableFile{
+		FileAttrs: NewFileAttrs(
+			cf.GetParent(),
+			cf.GetURI(),
+			cf.GetFileType(),
+			cf.FileError(),
+		),
+		collectableFile: cf,
+		cancelCtx:       ctx,
+	}, nil
+}
+
+// FindDependencies Returns all the dependencies
+func (c *cancelCollectableFile) FindDependencies() ([]CollectableFileOperator, error) {
+	if yes, err := c.cancelled(); yes {
+		return nil, err
+	}
+	return c.collectableFile.FindDependencies()
+}
+
+// ReplaceDependencyURIs Replaces all the dependencies uri in the file
+func (c *cancelCollectableFile) ReplaceDependencyURIs(mapper URIMapper) error {
+	if yes, err := c.cancelled(); yes {
+		return err
+	}
+	return c.collectableFile.ReplaceDependencyURIs(mapper)
+}
+
+// To Write the file to a new place
+func (c *cancelCollectableFile) To(uri string) error {
+	if yes, err := c.cancelled(); yes {
+		return err
+	}
+	return c.collectableFile.To(uri)
+}
+
+func (c *cancelCollectableFile) cancelled() (bool, error) {
+	done := c.cancelCtx.Done()
+	if done == nil {
+		return false, nil
+	}
+
+	select {
+	case <-done:
+		err := c.cancelCtx.Err()
+		return true, err
+	default:
+		return false, nil
+	}
 }

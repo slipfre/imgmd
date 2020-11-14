@@ -1,125 +1,113 @@
 package internal
 
 import (
-	"fmt"
-	"path"
+	"context"
+	"path/filepath"
+	"reflect"
 	"strings"
 )
 
 // Collector Collect collecatable files
 type Collector interface {
-	Collect() ([]Collector, error)
+	Collect(ctx context.Context) <-chan error
 }
 
-// Listener Listen certain kind of event
-type Listener interface {
-	OnEvent(attrs FileAttributesGetter, err error)
+// AsyncCollector Collector which collect file in another Goroutine
+type AsyncCollector struct {
+	collectableFile CollectableFileOperator
+	targetPath      string
 }
 
-// CollectorWithListener Collector which contains listener
-type CollectorWithListener struct {
-	errListener      Listener
-	completeListener Listener
-	collectableFile  CollectableFileOperator
-	targetPath       string
-}
-
-// CollectorWithListenerConfig Config for CollectorWithListener
-type CollectorWithListenerConfig struct {
-	errListener      Listener
-	completeListener Listener
-}
-
-// CollectorWithListenerOption Option configs for CollectorWithListener
-type CollectorWithListenerOption func(config *CollectorWithListenerConfig)
-
-// WithErrListener ErrListener option for CollectorWithListener
-func WithErrListener(errListener Listener) CollectorWithListenerOption {
-	return func(config *CollectorWithListenerConfig) {
-		config.errListener = errListener
-	}
-}
-
-// WithCompleteListener CompleteListener option for CollectorWithListener
-func WithCompleteListener(completeListenr Listener) CollectorWithListenerOption {
-	return func(config *CollectorWithListenerConfig) {
-		config.completeListener = completeListenr
-	}
-}
-
-// NewCollectorWithListener Constructor for CollectorWithListener
-func NewCollectorWithListener(cf CollectableFileOperator, targetPath string, options ...CollectorWithListenerOption) *CollectorWithListener {
-	config := &CollectorWithListenerConfig{}
-	for _, option := range options {
-		option(config)
-	}
-
-	return &CollectorWithListener{
-		errListener:      config.errListener,
-		completeListener: config.completeListener,
-		collectableFile:  cf,
-		targetPath:       targetPath,
+// NewAsyncCollector Constructor for NewAsyncCollector
+func NewAsyncCollector(cf CollectableFileOperator, targetPath string) *AsyncCollector {
+	return &AsyncCollector{
+		collectableFile: cf,
+		targetPath:      targetPath,
 	}
 }
 
 // Collect Collect the collectableFile
-func (c *CollectorWithListener) Collect() ([]Collector, error) {
-	dependencies, err := c.collectFile()
+func (c *AsyncCollector) Collect(ctx context.Context) <-chan error {
+	complete := make(chan error)
+	go c.collectFileAsync(ctx, complete)
+	return complete
+}
+
+func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- error) {
+	cancelCF, err := WithCancel(ctx, c.collectableFile)
 	if err != nil {
-		if c.errListener != nil {
-			c.errListener.OnEvent(c.collectableFile, err)
+		complete <- err
+		return
+	}
+
+	deps, err := cancelCF.FindDependencies()
+	if err != nil {
+		complete <- err
+		return
+	}
+
+	if deps != nil && len(deps) > 0 {
+		targetResourcesDirPath := c.getTargetResourcesDirPath()
+		if err = CreateDirectory(targetResourcesDirPath); err != nil {
+			complete <- err
+			return
 		}
-		return nil, err
+
+		err = cancelCF.ReplaceDependencyURIs(func(fileType FileType, uri []byte) []byte {
+			dirName := filepath.Base(targetResourcesDirPath)
+			fileName := filepath.Base(string(uri))
+			newReferencePath := filepath.Join(dirName, fileName)
+			return []byte(newReferencePath)
+		})
+		if err != nil {
+			complete <- err
+			return
+		}
+
+		subCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		cases := make([]reflect.SelectCase, len(deps))
+		for i, dep := range deps {
+			collector := NewAsyncCollector(
+				dep,
+				filepath.Join(targetResourcesDirPath, filepath.Base(dep.GetURI())),
+			)
+			subComplete := collector.Collect(subCtx)
+			cases[i] = reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(subComplete),
+			}
+		}
+
+		for remaining := len(deps); remaining > 0; remaining-- {
+			chosen, value, _ := reflect.Select(cases)
+			if value.Interface() != nil {
+				err = value.Interface().(error)
+			}
+			if err != nil {
+				cancel()
+				complete <- err.(error)
+				return
+			}
+			cases[chosen].Chan = reflect.ValueOf(nil)
+			continue
+		}
 	}
-	if c.completeListener != nil {
-		c.completeListener.OnEvent(c.collectableFile, err)
+
+	if err = cancelCF.To(c.targetPath); err != nil {
+		complete <- err
+		return
 	}
-	return dependencies, err
+
+	complete <- nil
 }
 
-func (c *CollectorWithListener) collectFile() ([]Collector, error) {
-	deps, err := c.collectableFile.FindDependencies()
-	if err != nil {
-		return nil, err
-	}
-
-	targetResourcesDirPath := c.getTargetResourcesDirPath()
-	if err = CreateDirectory(targetResourcesDirPath); err != nil {
-		return nil, err
-	}
-
-	var depCollectors []Collector
-	for _, dep := range deps {
-		collector := NewCollectorWithListener(
-			dep,
-			fmt.Sprintf("%s/%s", targetResourcesDirPath, path.Base(dep.GetURI())),
-			WithErrListener(c.errListener),
-			WithCompleteListener(c.completeListener),
-		)
-		depCollectors = append(depCollectors, collector)
-	}
-
-	err = c.collectableFile.ReplaceDependencyURIs(func(fileType FileType, uri []byte) []byte {
-		dirName := path.Base(targetResourcesDirPath)
-		newReferencePath := fmt.Sprintf("%s/%s", dirName, string(uri))
-		return []byte(newReferencePath)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err = c.collectableFile.To(c.targetPath); err != nil {
-		return nil, err
-	}
-
-	return depCollectors, err
-}
-
-func (c *CollectorWithListener) getTargetResourcesDirPath() string {
-	targetURI := c.collectableFile.GetURI()
-	directory := path.Dir(targetURI)
-	filenameWithSuffix := path.Base(targetURI)
-	suffix := path.Ext(filenameWithSuffix)
+func (c *AsyncCollector) getTargetResourcesDirPath() string {
+	targetURI := c.targetPath
+	directory := filepath.Dir(targetURI)
+	filenameWithSuffix := filepath.Base(targetURI)
+	suffix := filepath.Ext(filenameWithSuffix)
 	filename := strings.TrimSuffix(filenameWithSuffix, suffix)
-	return fmt.Sprintf("%s%s_medias", directory, filename)
+	return filepath.Join(directory, filename) + "_medias"
 }
