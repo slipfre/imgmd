@@ -5,9 +5,12 @@ import (
 	"context"
 	"errors"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
+	"time"
 )
 
 // FileAttributesGetter Attributes of a file
@@ -15,6 +18,8 @@ type FileAttributesGetter interface {
 	GetFileType() FileType
 	GetParent() string
 	GetURI() string
+	GetUpdatedTime() (*time.Time, error)
+	IsUpdatedSince(time *time.Time) (bool, error)
 	FileError() error
 }
 
@@ -44,19 +49,21 @@ const (
 // FileAttrs Attributes of the collectable file
 type FileAttrs struct {
 	// TODO: 通过链表的形式链接起来
-	parent   string
-	uri      string
-	fileType FileType
-	err      error
+	parent      string
+	uri         string
+	fileType    FileType
+	updatedTime *time.Time
+	err         error
 }
 
 // NewFileAttrs Create and return a FileAttrs object
-func NewFileAttrs(parent, uri string, fileType FileType, err error) *FileAttrs {
+func NewFileAttrs(parent, uri string, fileType FileType, updatedTime *time.Time, err error) *FileAttrs {
 	return &FileAttrs{
-		parent:   parent,
-		uri:      uri,
-		fileType: fileType,
-		err:      err,
+		parent:      parent,
+		uri:         uri,
+		fileType:    fileType,
+		updatedTime: updatedTime,
+		err:         err,
 	}
 }
 
@@ -80,6 +87,25 @@ func (f *FileAttrs) FileError() error {
 	return f.err
 }
 
+// GetUpdatedTime Get lastest update time
+func (f *FileAttrs) GetUpdatedTime() (*time.Time, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.updatedTime, f.err
+}
+
+// IsUpdatedSince For local file, Returns true if the file has updated.
+func (f *FileAttrs) IsUpdatedSince(time *time.Time) (bool, error) {
+	if f.err != nil {
+		return false, f.err
+	}
+	if f.updatedTime == nil {
+		return true, nil
+	}
+	return time.After(*f.updatedTime), nil
+}
+
 // LeafFile Collectable file which has no dependencies
 type LeafFile struct {
 	*FileAttrs
@@ -90,12 +116,23 @@ func NewLeafFile(parent, uri string) *LeafFile {
 	reader, fError := NewFileReader(uri)
 	defer reader.Close()
 
-	if absURI, err := filepath.Abs(uri); err == nil {
-		uri = absURI
+	var updatedTimePtr *time.Time
+	if !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") {
+		var fi os.FileInfo
+		if fError == nil {
+			if fi, fError = os.Stat(uri); fError != nil {
+				updatedTime := fi.ModTime()
+				updatedTimePtr = &updatedTime
+			}
+		}
+
+		if absURI, err := filepath.Abs(uri); err == nil {
+			uri = absURI
+		}
 	}
 
 	return &LeafFile{
-		FileAttrs: NewFileAttrs(parent, uri, Standalone, fError),
+		FileAttrs: NewFileAttrs(parent, uri, Standalone, updatedTimePtr, fError),
 	}
 }
 
@@ -145,20 +182,31 @@ type MarkdownFile struct {
 // NewMarkdownFile Create a MarkdownFile object which is a collectable file for
 // Markdown file
 func NewMarkdownFile(parent, uri string) *MarkdownFile {
-	reader, err := NewFileReader(uri)
+	reader, fError := NewFileReader(uri)
 	defer reader.Close()
 
 	var data []byte
-	if err == nil {
-		data, err = ioutil.ReadAll(reader)
+	if fError == nil {
+		data, fError = ioutil.ReadAll(reader)
 	}
 
-	if absURI, err := filepath.Abs(uri); err == nil {
-		uri = absURI
+	var updatedTimePtr *time.Time
+	if !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") {
+		var fi os.FileInfo
+		if fError == nil {
+			if fi, fError = os.Stat(uri); fError != nil {
+				updatedTime := fi.ModTime()
+				updatedTimePtr = &updatedTime
+			}
+		}
+
+		if absURI, err := filepath.Abs(uri); err == nil {
+			uri = absURI
+		}
 	}
 
 	return &MarkdownFile{
-		FileAttrs: NewFileAttrs(parent, uri, Markdown, err),
+		FileAttrs: NewFileAttrs(parent, uri, Markdown, updatedTimePtr, fError),
 		buffer:    data,
 	}
 }
@@ -224,11 +272,14 @@ func WithCancel(ctx context.Context, cf CollectableFileOperator) (CollectableFil
 		return nil, err
 	}
 
+	updatedTime, _ := cf.GetUpdatedTime()
+
 	return &cancelCollectableFile{
 		FileAttrs: NewFileAttrs(
 			cf.GetParent(),
 			cf.GetURI(),
 			cf.GetFileType(),
+			updatedTime,
 			cf.FileError(),
 		),
 		collectableFile: cf,

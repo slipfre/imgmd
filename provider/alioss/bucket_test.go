@@ -2,6 +2,7 @@ package alioss
 
 import (
 	"testing"
+	"time"
 
 	"github.com/slipfre/imgmd/provider"
 	"github.com/stretchr/testify/require"
@@ -61,4 +62,44 @@ func TestBucket_PutAndRemoveObject(t *testing.T) {
 	require.Falsef(t, isExist, "Object %s should not exist", testObjectKeyName)
 
 	return
+}
+
+func TestBuket_GetObjectLastModifiedTime(t *testing.T) {
+	testObjectKeyName := "test/test_object_last_modified_time_object"
+	testBucketName := "test-object-last-modified-time-bucket"
+	localFilePath := TestImgPath
+
+	client, err := getClient()
+	require.Nil(t, err)
+
+	bucket, err := getBucket(client, testBucketName)
+	require.Nil(t, err)
+
+	defer cleanBucket(client, testBucketName)
+
+	isExist, err := bucket.IsObjectExist(testObjectKeyName)
+	require.Nil(t, err)
+
+	if isExist {
+		err = bucket.DeleteObject(testObjectKeyName)
+		require.Nil(t, err)
+	}
+
+	beforePutObject := time.Now()
+	_, err = bucket.PutObjectFromFile(
+		testObjectKeyName,
+		localFilePath,
+		provider.WithACL(provider.PublicRead),
+		provider.WithRedundancyType(provider.LRS),
+		provider.WithStorage(provider.Standard),
+	)
+	require.Nil(t, err)
+
+	lastModifiedTime, err := bucket.GetObjectLastModified(testObjectKeyName)
+	require.Nil(t, err)
+	require.NotNil(t, lastModifiedTime)
+	beforePutObject.Before(*lastModifiedTime)
+
+	err = bucket.DeleteObject(testObjectKeyName)
+	require.Nil(t, err)
 }

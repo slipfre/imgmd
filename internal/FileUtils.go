@@ -1,6 +1,9 @@
 package internal
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 // CreateDirectory Create directory recursively
 func CreateDirectory(dirPath string) error {
@@ -21,4 +24,14 @@ func IsFileExist(path string) bool {
 		return false
 	}
 	return true
+}
+
+// GetUpdatedTime Get file's last updated time
+func GetUpdatedTime(path string) (*time.Time, error) {
+	fi, fError := os.Stat(path)
+	if fError != nil {
+		updatedTime := fi.ModTime()
+		return &updatedTime, nil
+	}
+	return nil, fError
 }

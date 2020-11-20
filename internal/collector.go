@@ -16,13 +16,38 @@ type Collector interface {
 type AsyncCollector struct {
 	collectableFile CollectableFileOperator
 	targetPath      string
+	force           bool
+}
+
+type collectorConfigs struct {
+	force bool
+}
+
+// CollectorOption Options for collectors
+type CollectorOption func(configs *collectorConfigs)
+
+// WithForce Option config for collectors. If force is true, the file will be
+// collected even though the target file exists and up-to-date
+func WithForce(force bool) CollectorOption {
+	return func(configs *collectorConfigs) {
+		configs.force = force
+	}
 }
 
 // NewAsyncCollector Constructor for NewAsyncCollector
-func NewAsyncCollector(cf CollectableFileOperator, targetPath string) *AsyncCollector {
+func NewAsyncCollector(cf CollectableFileOperator, targetPath string, options ...CollectorOption) *AsyncCollector {
+	configs := &collectorConfigs{
+		force: false,
+	}
+
+	for _, option := range options {
+		option(configs)
+	}
+
 	return &AsyncCollector{
 		collectableFile: cf,
 		targetPath:      targetPath,
+		force:           configs.force,
 	}
 }
 
@@ -38,6 +63,20 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 	if err != nil {
 		complete <- err
 		return
+	}
+
+	if IsFileExist(c.targetPath) {
+		updatedTime, _ := GetUpdatedTime(c.targetPath)
+		isUpdatedSince, err := c.collectableFile.IsUpdatedSince(updatedTime)
+		if err != nil {
+			complete <- err
+			return
+		}
+		if !isUpdatedSince {
+			// No need for collecting
+			complete <- nil
+			return
+		}
 	}
 
 	deps, err := cancelCF.FindDependencies()
@@ -69,10 +108,13 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 
 		cases := make([]reflect.SelectCase, len(deps))
 		for i, dep := range deps {
-			collector := NewAsyncCollector(
-				dep,
-				filepath.Join(targetResourcesDirPath, filepath.Base(dep.GetURI())),
-			)
+			forceOption := WithForce(false)
+			if c.force {
+				forceOption = WithForce(true)
+			}
+			depTargetPath := filepath.Join(targetResourcesDirPath, filepath.Base(dep.GetURI()))
+
+			collector := NewAsyncCollector(dep, depTargetPath, forceOption)
 			subComplete := collector.Collect(subCtx)
 			cases[i] = reflect.SelectCase{
 				Dir:  reflect.SelectRecv,

@@ -18,7 +18,7 @@ func TestMain(m *testing.M) {
 	TestAKS = os.Getenv("AKS")
 	TestEndpoint = os.Getenv("Endpoint")
 	TestBucketName = os.Getenv("BucketName")
-	TestImgPath = "../../resources/icon_markdown.png"
+	TestImgPath = "C:/Users/Happy/Desktop/code/imgmd/resources/icon_markdown.png"
 
 	// 本地获取环境变量为空不执行穿透测试
 	if TestAKID != "" {

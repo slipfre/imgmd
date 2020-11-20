@@ -3,6 +3,7 @@ package alioss
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 	"github.com/slipfre/imgmd/provider"
@@ -61,6 +62,20 @@ func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...p
 func (bucket *Bucket) DeleteObject(objectKey string) (err error) {
 	err = bucket.aliBucket.DeleteObject(objectKey)
 	return
+}
+
+// GetObjectLastModified 获取 Object 最后一次修改的时间
+func (bucket *Bucket) GetObjectLastModified(objectKey string) (*time.Time, error) {
+	headers, err := bucket.aliBucket.GetObjectMeta(objectKey)
+	if err != nil {
+		return nil, err
+	}
+	lastModified := headers.Get("Last-Modified")
+	lastModifiedTime, err := time.ParseInLocation(time.RFC1123, lastModified, time.UTC)
+	if err != nil {
+		return nil, err
+	}
+	return &lastModifiedTime, err
 }
 
 // IsObjectExist 判断 Object 是否存在
