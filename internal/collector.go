@@ -12,15 +12,14 @@ type Collector interface {
 	Collect(ctx context.Context) <-chan error
 }
 
-// AsyncCollector Collector which collect file in another Goroutine
-type AsyncCollector struct {
-	collectableFile CollectableFileOperator
-	targetPath      string
-	force           bool
-}
-
 type collectorConfigs struct {
 	force bool
+}
+
+func defaultCollectorConfigs() *collectorConfigs {
+	return &collectorConfigs{
+		force: false,
+	}
 }
 
 // CollectorOption Options for collectors
@@ -34,11 +33,16 @@ func WithForce(force bool) CollectorOption {
 	}
 }
 
+// AsyncCollector Collector which collect file in another Goroutine
+type AsyncCollector struct {
+	collectableFile CollectableFileOperator
+	targetPath      string
+	force           bool
+}
+
 // NewAsyncCollector Constructor for NewAsyncCollector
 func NewAsyncCollector(cf CollectableFileOperator, targetPath string, options ...CollectorOption) *AsyncCollector {
-	configs := &collectorConfigs{
-		force: false,
-	}
+	configs := defaultCollectorConfigs()
 
 	for _, option := range options {
 		option(configs)

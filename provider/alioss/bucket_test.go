@@ -1,6 +1,8 @@
 package alioss
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -23,10 +25,11 @@ func cleanBucket(client provider.Client, bucketName string) (err error) {
 	return
 }
 
-func TestBucket_PutAndRemoveObject(t *testing.T) {
+type PutObjectWrapper func(bucket provider.Bucket, objectKey string, options ...provider.ObjectOption) (url string, err error)
+
+func testPutObject(t *testing.T, put PutObjectWrapper) {
 	testObjectKeyName := "test/test-bucket-put-and-remove-object-object"
 	testBucketName := "test-bucket-put-and-remove-object-bucket"
-	localFilePath := TestImgPath
 
 	client, err := getClient()
 	require.Nil(t, err)
@@ -40,9 +43,9 @@ func TestBucket_PutAndRemoveObject(t *testing.T) {
 	require.Nil(t, err)
 	require.Falsef(t, isExist, "Object %s should not exist", testObjectKeyName)
 
-	url, err := bucket.PutObjectFromFile(
+	url, err := put(
+		bucket,
 		testObjectKeyName,
-		localFilePath,
 		provider.WithACL(provider.PublicRead),
 		provider.WithRedundancyType(provider.LRS),
 		provider.WithStorage(provider.Standard),
@@ -61,6 +64,30 @@ func TestBucket_PutAndRemoveObject(t *testing.T) {
 	require.Nil(t, err)
 	require.Falsef(t, isExist, "Object %s should not exist", testObjectKeyName)
 
+	return
+}
+
+func TestBucket_PutAndRemoveObjectFromFile(t *testing.T) {
+	localFilePath := TestImgPath
+	putObjectFromFileWrapper := func(bucket provider.Bucket, objectKey string, options ...provider.ObjectOption) (url string, err error) {
+		return bucket.PutObjectFromFile(objectKey, localFilePath, options...)
+	}
+	testPutObject(t, putObjectFromFileWrapper)
+	return
+}
+
+func TestBucket_PutAndRemoveObjectFromBytes(t *testing.T) {
+	reader, err := os.Open(TestImgPath)
+	require.Nil(t, err)
+	reader.Close()
+
+	bytes, err := ioutil.ReadAll(reader)
+	require.Nil(t, err)
+
+	putObjectFromBytesWrapper := func(bucket provider.Bucket, objectKey string, options ...provider.ObjectOption) (url string, err error) {
+		return bucket.PutObjectFromBytes(objectKey, bytes, options...)
+	}
+	testPutObject(t, putObjectFromBytesWrapper)
 	return
 }
 

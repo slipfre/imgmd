@@ -5,6 +5,7 @@ import "time"
 // Bucket OBS 服务供应商的 bucket 接口，用于提供对象存储功能
 type Bucket interface {
 	PutObjectFromFile(objectKey, filePath string, options ...ObjectOption) (url string, err error)
+	PutObjectFromBytes(objectKey string, data []byte, options ...ObjectOption) (url string, err error)
 	DeleteObject(objectKey string) (err error)
 	IsObjectExist(objectKey string) (isExist bool, err error)
 	GetObjectLastModified(objectKey string) (*time.Time, error)

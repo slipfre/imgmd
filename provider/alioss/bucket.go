@@ -1,8 +1,11 @@
 package alioss
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
@@ -23,6 +26,20 @@ func NewBucket(bucket *oss.Bucket) *Bucket {
 
 // PutObjectFromFile 上传本地文件
 func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...provider.ObjectOption) (url string, err error) {
+	if reader, err := os.Open(filePath); err == nil {
+		defer reader.Close()
+		return bucket.PutObject(objectKey, reader, options...)
+	}
+	return
+}
+
+// PutObjectFromBytes 上传 byte 数组
+func (bucket *Bucket) PutObjectFromBytes(objectKey string, data []byte, options ...provider.ObjectOption) (url string, err error) {
+	return bucket.PutObject(objectKey, bytes.NewReader(data), options...)
+}
+
+// PutObject 上传 Object
+func (bucket *Bucket) PutObject(objectKey string, reader io.Reader, options ...provider.ObjectOption) (url string, err error) {
 	objectConfig := provider.DefaultOptionConfig()
 	for _, option := range options {
 		option(objectConfig)
@@ -39,9 +56,9 @@ func (bucket *Bucket) PutObjectFromFile(objectKey, filePath string, options ...p
 	if err != nil {
 		return
 	}
-	err = bucket.aliBucket.PutObjectFromFile(
+	err = bucket.aliBucket.PutObject(
 		objectKey,
-		filePath,
+		reader,
 		oss.ObjectACL(aliACL),
 		oss.StorageClass(aliStorageClass),
 		oss.RedundancyType(aliRedundancyType),
