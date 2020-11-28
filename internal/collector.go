@@ -2,9 +2,11 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"reflect"
-	"strings"
+
+	"github.com/slipfre/imgmd/provider"
 )
 
 // Collector Collect collecatable files
@@ -12,14 +14,98 @@ type Collector interface {
 	Collect(ctx context.Context) <-chan error
 }
 
+// CollectorGenerator Generate collectors
+type CollectorGenerator func(cf CollectableFileOperator, base, objectKey string, depURIMapper URIMapper, options ...CollectorOption) (Collector, error)
+
+// LocalCollectorGenerator Generate local collectors
+func LocalCollectorGenerator(cf CollectableFileOperator, base, objectKey string, depURIMapper URIMapper, options ...CollectorOption) (Collector, error) {
+	return NewLocalAsyncCollector(cf, base, objectKey, depURIMapper, options...)
+}
+
+// GetOBSCollectorGenerator Return a OBS collector generator which generate obs collectors
+func GetOBSCollectorGenerator(bucket provider.Bucket) CollectorGenerator {
+	return func(cf CollectableFileOperator, base, objectKey string, depURIMapper URIMapper, options ...CollectorOption) (Collector, error) {
+		return NewOBSAsyncCollector(bucket, cf, base, objectKey, depURIMapper, options...)
+	}
+}
+
+// FreshValidator Validate whether the local file is up to date
+type FreshValidator func(cf CollectableFileOperator, base, objectKey string) (bool, error)
+
+// LocalFileFreshValidator Validate whether the local file is up to date
+func LocalFileFreshValidator(cf CollectableFileOperator, base, objectKey string) (bool, error) {
+	targetPath := filepath.Join(base, objectKey)
+	if IsFileExist(targetPath) {
+		updatedTime, _ := GetUpdatedTime(targetPath)
+		isUpdatedSince, err := cf.IsUpdatedSince(updatedTime)
+		if err != nil {
+			return false, err
+		}
+		if !isUpdatedSince {
+			// No need for collecting
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// GetOBSFileFreshValidator Get a FreshValidator which validates whether the obs file is up to date
+func GetOBSFileFreshValidator(bucket provider.Bucket) (FreshValidator, error) {
+	if bucket == nil {
+		return nil, errors.New("bucket should not be nil")
+	}
+	return func(cf CollectableFileOperator, base, objectKey string) (bool, error) {
+		exist, err := bucket.IsObjectExist(objectKey)
+		if err != nil {
+			return false, err
+		}
+		if exist {
+			updatedTime, err := bucket.GetObjectLastModified(objectKey)
+			if err != nil {
+				return false, err
+			}
+			isUpdatedSince, err := cf.IsUpdatedSince(updatedTime)
+			if err != nil {
+				return false, err
+			}
+			if !isUpdatedSince {
+				return false, nil
+			}
+		}
+		return true, nil
+	}, nil
+}
+
+// Mover Make files to specified place
+type Mover func(cf CollectableFileOperator, base, objectKey string) error
+
+// LocalMover Make files to specified local place
+func LocalMover(cf CollectableFileOperator, base, objectKey string) error {
+	return cf.To(filepath.Join(base, objectKey))
+}
+
+// GetOBSMover Return a OBSMover which make files to OBS with specified object key
+func GetOBSMover(bucket provider.Bucket) (Mover, error) {
+	if bucket == nil {
+		return nil, errors.New("bucket should not be nil")
+	}
+	return func(cf CollectableFileOperator, base, objectKey string) error {
+		return cf.ToOBS(bucket, objectKey)
+	}, nil
+}
+
 type collectorConfigs struct {
-	force bool
+	force                 bool
+	depCollectorGenerator CollectorGenerator
+	depURIMapper          URIMapper
 }
 
 func defaultCollectorConfigs() *collectorConfigs {
-	return &collectorConfigs{
-		force: false,
+	configs := &collectorConfigs{
+		force:                 false,
+		depCollectorGenerator: LocalCollectorGenerator,
 	}
+	return configs
 }
 
 // CollectorOption Options for collectors
@@ -33,15 +119,36 @@ func WithForce(force bool) CollectorOption {
 	}
 }
 
+// WithDependencyCollectorGenerator Option config for collectors
+func WithDependencyCollectorGenerator(generator CollectorGenerator) CollectorOption {
+	return func(configs *collectorConfigs) {
+		configs.depCollectorGenerator = generator
+	}
+}
+
 // AsyncCollector Collector which collect file in another Goroutine
 type AsyncCollector struct {
-	collectableFile CollectableFileOperator
-	targetPath      string
-	force           bool
+	collectableFile       CollectableFileOperator
+	base                  string
+	objectKey             string
+	targetPath            string
+	depCollectorGenerator CollectorGenerator
+	depURIMapper          URIMapper
+	freshValidator        FreshValidator
+	mover                 Mover
+	force                 bool
 }
 
 // NewAsyncCollector Constructor for NewAsyncCollector
-func NewAsyncCollector(cf CollectableFileOperator, targetPath string, options ...CollectorOption) *AsyncCollector {
+func NewAsyncCollector(cf CollectableFileOperator, base, objectKey string, freshValidator FreshValidator, mover Mover, depURIMapper URIMapper, options ...CollectorOption) (*AsyncCollector, error) {
+	if freshValidator == nil {
+		return nil, errors.New("'IsNeedCollectValidator' should not be nil")
+	}
+
+	if mover == nil {
+		return nil, errors.New("'Mover' should not be nil")
+	}
+
 	configs := defaultCollectorConfigs()
 
 	for _, option := range options {
@@ -49,10 +156,16 @@ func NewAsyncCollector(cf CollectableFileOperator, targetPath string, options ..
 	}
 
 	return &AsyncCollector{
-		collectableFile: cf,
-		targetPath:      targetPath,
-		force:           configs.force,
-	}
+		collectableFile:       cf,
+		base:                  base,
+		objectKey:             objectKey,
+		targetPath:            filepath.Join(base, objectKey),
+		freshValidator:        freshValidator,
+		depURIMapper:          depURIMapper,
+		mover:                 mover,
+		depCollectorGenerator: configs.depCollectorGenerator,
+		force:                 configs.force,
+	}, nil
 }
 
 // Collect Collect the collectableFile
@@ -69,15 +182,13 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 		return
 	}
 
-	if IsFileExist(c.targetPath) {
-		updatedTime, _ := GetUpdatedTime(c.targetPath)
-		isUpdatedSince, err := c.collectableFile.IsUpdatedSince(updatedTime)
+	if !c.force {
+		needCollect, err := c.freshValidator(c.collectableFile, c.base, c.objectKey)
 		if err != nil {
 			complete <- err
 			return
 		}
-		if !isUpdatedSince {
-			// No need for collecting
+		if !needCollect {
 			complete <- nil
 			return
 		}
@@ -90,18 +201,9 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 	}
 
 	if deps != nil && len(deps) > 0 {
-		targetResourcesDirPath := c.getTargetResourcesDirPath()
-		if err = CreateDirectory(targetResourcesDirPath); err != nil {
-			complete <- err
-			return
-		}
+		depObjDir := GetTargetResourcesDirPath(c.objectKey)
 
-		err = cancelCF.ReplaceDependencyURIs(func(fileType FileType, uri []byte) []byte {
-			dirName := filepath.Base(targetResourcesDirPath)
-			fileName := filepath.Base(string(uri))
-			newReferencePath := filepath.Join(dirName, fileName)
-			return []byte(newReferencePath)
-		})
+		err = cancelCF.ReplaceDependencyURIs(c.base, c.objectKey, c.depURIMapper)
 		if err != nil {
 			complete <- err
 			return
@@ -112,13 +214,13 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 
 		cases := make([]reflect.SelectCase, len(deps))
 		for i, dep := range deps {
-			forceOption := WithForce(false)
-			if c.force {
-				forceOption = WithForce(true)
+			depObjKey := filepath.Join(depObjDir, filepath.Base(dep.GetURI()))
+			collector, err := c.depCollectorGenerator(dep, c.base, depObjKey, c.depURIMapper, WithForce(c.force))
+			if err != nil {
+				cancel()
+				complete <- err
+				return
 			}
-			depTargetPath := filepath.Join(targetResourcesDirPath, filepath.Base(dep.GetURI()))
-
-			collector := NewAsyncCollector(dep, depTargetPath, forceOption)
 			subComplete := collector.Collect(subCtx)
 			cases[i] = reflect.SelectCase{
 				Dir:  reflect.SelectRecv,
@@ -141,7 +243,7 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 		}
 	}
 
-	if err = cancelCF.To(c.targetPath); err != nil {
+	if err = c.mover(cancelCF, c.base, c.objectKey); err != nil {
 		complete <- err
 		return
 	}
@@ -149,11 +251,30 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 	complete <- nil
 }
 
-func (c *AsyncCollector) getTargetResourcesDirPath() string {
-	targetURI := c.targetPath
-	directory := filepath.Dir(targetURI)
-	filenameWithSuffix := filepath.Base(targetURI)
-	suffix := filepath.Ext(filenameWithSuffix)
-	filename := strings.TrimSuffix(filenameWithSuffix, suffix)
-	return filepath.Join(directory, filename) + "_medias"
+// NewLocalAsyncCollector Return a AsyncCollector which collect the file to
+// local place
+func NewLocalAsyncCollector(cf CollectableFileOperator, base, objectKey string, depURIMapper URIMapper, options ...CollectorOption) (*AsyncCollector, error) {
+	collector, err := NewAsyncCollector(
+		cf, base, objectKey, LocalFileFreshValidator, LocalMover, depURIMapper, options...)
+	if err != nil {
+		return nil, err
+	}
+	return collector, nil
+}
+
+// NewOBSAsyncCollector Returns a AsyncCollector which collect the file to OBS
+func NewOBSAsyncCollector(bucket provider.Bucket, cf CollectableFileOperator, base, objectKey string, depURIMapper URIMapper, options ...CollectorOption) (*AsyncCollector, error) {
+	validator, err := GetOBSFileFreshValidator(bucket)
+	if err != nil {
+		return nil, err
+	}
+	mover, err := GetOBSMover(bucket)
+	if err != nil {
+		return nil, err
+	}
+	collector, err := NewAsyncCollector(cf, base, objectKey, validator, mover, depURIMapper, options...)
+	if err != nil {
+		return nil, err
+	}
+	return collector, nil
 }

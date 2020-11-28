@@ -95,6 +95,16 @@ func (bucket *Bucket) GetObjectLastModified(objectKey string) (*time.Time, error
 	return &lastModifiedTime, err
 }
 
+// GetObjectURL 获取 Object 的 URL
+func (bucket *Bucket) GetObjectURL(objectKey string) string {
+	return fmt.Sprintf(
+		"https://%s.%s/%s",
+		bucket.aliBucket.BucketName,
+		bucket.aliBucket.GetConfig().Endpoint,
+		objectKey,
+	)
+}
+
 // IsObjectExist 判断 Object 是否存在
 func (bucket *Bucket) IsObjectExist(objectKey string) (isExist bool, err error) {
 	isExist, err = bucket.aliBucket.IsObjectExist(objectKey)

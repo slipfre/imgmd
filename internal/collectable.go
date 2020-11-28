@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/slipfre/imgmd/provider"
 )
 
 // FileAttributesGetter Attributes of a file
@@ -27,12 +29,35 @@ type FileAttributesGetter interface {
 type CollectableFileOperator interface {
 	FileAttributesGetter
 	FindDependencies() ([]CollectableFileOperator, error)
-	ReplaceDependencyURIs(mapper URIMapper) error
+	ReplaceDependencyURIs(base, objectKey string, mapper URIMapper) error
 	To(uri string) error
+	ToOBS(bucket provider.Bucket, key string) error
 }
 
 // URIMapper Map the uri
-type URIMapper func(fileType FileType, uri []byte) []byte
+type URIMapper func(fileType FileType, originURI []byte, base, objectKey string) []byte
+
+// LocalURIMapper Map the uri to 'targetDirPath/filename'
+func LocalURIMapper(fileType FileType, uri []byte, base, objectKey string) []byte {
+	destDirPath := GetTargetResourcesDirPath(filepath.Join(base, objectKey))
+	dirName := filepath.Base(destDirPath)
+	fileName := filepath.Base(string(uri))
+	newReferencePath := filepath.Join(dirName, fileName)
+	return []byte(newReferencePath)
+}
+
+// GetOBSURIMapper Returns a OBSURIMapper which maps the uri to corresponding
+// object under the bucket
+func GetOBSURIMapper(bucket provider.Bucket) (URIMapper, error) {
+	if bucket == nil {
+		return nil, errors.New("bucket should not be nil")
+	}
+	return func(fileType FileType, originURI []byte, base, objectKey string) []byte {
+		depObjDir := GetTargetResourcesDirPath(objectKey)
+		depObjKey := filepath.Join(depObjDir, filepath.Base(string(originURI)))
+		return []byte(bucket.GetObjectURL(filepath.ToSlash(depObjKey)))
+	}, nil
+}
 
 // FileType Type of collectable files
 type FileType string
@@ -48,7 +73,6 @@ const (
 
 // FileAttrs Attributes of the collectable file
 type FileAttrs struct {
-	// TODO: 通过链表的形式链接起来
 	parent      string
 	uri         string
 	fileType    FileType
@@ -147,7 +171,7 @@ func (l *LeafFile) FindDependencies() ([]CollectableFileOperator, error) {
 }
 
 // ReplaceDependencyURIs Replaces all the dependencies uri in the file
-func (l *LeafFile) ReplaceDependencyURIs(mapper URIMapper) error {
+func (l *LeafFile) ReplaceDependencyURIs(base, objectKey string, mapper URIMapper) error {
 	if err := l.FileError(); err != nil {
 		return err
 	}
@@ -159,7 +183,22 @@ func (l *LeafFile) To(uri string) error {
 	if err := l.FileError(); err != nil {
 		return err
 	}
+	if err := CreateDirectory(filepath.Dir(uri)); err != nil {
+		return err
+	}
 	return DownloadFile(l.uri, uri)
+}
+
+// ToOBS Write the file to bucket
+func (l *LeafFile) ToOBS(bucket provider.Bucket, key string) error {
+	if err := l.FileError(); err != nil {
+		return err
+	}
+	if bucket == nil {
+		return errors.New("bucket should not be nil")
+	}
+	_, err := bucket.PutObjectFromFile(filepath.ToSlash(key), l.uri)
+	return err
 }
 
 var imgRegex *regexp.Regexp
@@ -233,7 +272,7 @@ func (m *MarkdownFile) FindDependencies() ([]CollectableFileOperator, error) {
 }
 
 // ReplaceDependencyURIs Replace denpendency's uri in the file
-func (m *MarkdownFile) ReplaceDependencyURIs(mapper URIMapper) error {
+func (m *MarkdownFile) ReplaceDependencyURIs(base, objectKey string, mapper URIMapper) error {
 	if err := m.FileError(); err != nil {
 		return err
 	}
@@ -242,7 +281,7 @@ func (m *MarkdownFile) ReplaceDependencyURIs(mapper URIMapper) error {
 		m.buffer,
 		func(match []byte) []byte {
 			subMatchs := GetMarkdownImgRegex().FindSubmatch(match)
-			newURI := mapper(Standalone, subMatchs[2])
+			newURI := mapper(Standalone, subMatchs[2], base, objectKey)
 			return bytes.Replace(subMatchs[0], subMatchs[2], newURI, 1)
 		},
 	)
@@ -255,8 +294,22 @@ func (m *MarkdownFile) To(uri string) error {
 	if err := m.FileError(); err != nil {
 		return err
 	}
-
+	if err := CreateDirectory(filepath.Dir(uri)); err != nil {
+		return err
+	}
 	return ioutil.WriteFile(uri, m.buffer, 666)
+}
+
+// ToOBS Write the file to bucket
+func (m *MarkdownFile) ToOBS(bucket provider.Bucket, key string) error {
+	if err := m.FileError(); err != nil {
+		return err
+	}
+	if bucket == nil {
+		return errors.New("bucket should not be nil")
+	}
+	_, err := bucket.PutObjectFromBytes(filepath.ToSlash(key), m.buffer)
+	return err
 }
 
 type cancelCollectableFile struct {
@@ -296,11 +349,11 @@ func (c *cancelCollectableFile) FindDependencies() ([]CollectableFileOperator, e
 }
 
 // ReplaceDependencyURIs Replaces all the dependencies uri in the file
-func (c *cancelCollectableFile) ReplaceDependencyURIs(mapper URIMapper) error {
+func (c *cancelCollectableFile) ReplaceDependencyURIs(base, objectKey string, mapper URIMapper) error {
 	if yes, err := c.cancelled(); yes {
 		return err
 	}
-	return c.collectableFile.ReplaceDependencyURIs(mapper)
+	return c.collectableFile.ReplaceDependencyURIs(base, objectKey, mapper)
 }
 
 // To Write the file to a new place
@@ -309,6 +362,14 @@ func (c *cancelCollectableFile) To(uri string) error {
 		return err
 	}
 	return c.collectableFile.To(uri)
+}
+
+// ToOBS Write the file to bucket
+func (c *cancelCollectableFile) ToOBS(bucket provider.Bucket, key string) error {
+	if yes, err := c.cancelled(); yes {
+		return err
+	}
+	return c.collectableFile.ToOBS(bucket, key)
 }
 
 func (c *cancelCollectableFile) cancelled() (bool, error) {

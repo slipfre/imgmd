@@ -2,6 +2,8 @@ package internal
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -34,4 +36,13 @@ func GetUpdatedTime(path string) (*time.Time, error) {
 		return &updatedTime, nil
 	}
 	return nil, fError
+}
+
+// GetTargetResourcesDirPath Get path of dependencies' directory
+func GetTargetResourcesDirPath(parentDestPath string) string {
+	directory := filepath.Dir(parentDestPath)
+	filenameWithSuffix := filepath.Base(parentDestPath)
+	suffix := filepath.Ext(filenameWithSuffix)
+	filename := strings.TrimSuffix(filenameWithSuffix, suffix)
+	return filepath.Join(directory, filename) + "_medias"
 }

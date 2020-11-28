@@ -68,7 +68,7 @@ func TestMarkdownFile(t *testing.T) {
 		require.Nil(t, err)
 	}
 
-	collectableFile.ReplaceDependencyURIs(func(fileType FileType, uri []byte) []byte {
+	collectableFile.ReplaceDependencyURIs("", "", func(fileType FileType, uri []byte, base, objectKey string) []byte {
 		filename := filepath.Base(string(uri))
 		newReferencePath := fmt.Sprintf("u_good_i_good_imgs/temp_%s", filename)
 		return []byte(newReferencePath)

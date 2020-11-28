@@ -9,6 +9,7 @@ type Bucket interface {
 	DeleteObject(objectKey string) (err error)
 	IsObjectExist(objectKey string) (isExist bool, err error)
 	GetObjectLastModified(objectKey string) (*time.Time, error)
+	GetObjectURL(objectKey string) string
 }
 
 // ObjectOption Bucket 相关的可选参数
