@@ -1,4 +1,4 @@
-package internal
+package collector
 
 import (
 	"context"
@@ -8,20 +8,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/slipfre/imgmd/collectable"
 	"github.com/slipfre/imgmd/provider"
 	"github.com/slipfre/imgmd/provider/alioss"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAsyncCollector_testCollect(t *testing.T) {
-	md := NewMarkdownFile("", testMDPath)
+	md := collectable.NewMarkdownFile("", TestMDPath)
 	require.Nil(t, md.FileError())
 
 	mdCollector, err := NewLocalAsyncCollector(
 		md,
-		filepath.Dir(testMDTargetPath),
-		filepath.Base(testMDTargetPath),
-		LocalURIMapper,
+		filepath.Dir(TestMDTargetPath),
+		filepath.Base(TestMDTargetPath),
+		collectable.LocalURIMapper,
 	)
 	require.Nil(t, err)
 
@@ -30,11 +31,11 @@ func TestAsyncCollector_testCollect(t *testing.T) {
 		require.Nil(t, err)
 	}
 
-	err = os.Remove(testMDTargetPath)
+	err = os.Remove(TestMDTargetPath)
 	require.Nil(t, err)
 
-	suffix := filepath.Ext(testMDTargetPath)
-	dirName := strings.TrimSuffix(testMDTargetPath, suffix) + "_medias"
+	suffix := filepath.Ext(TestMDTargetPath)
+	dirName := strings.TrimSuffix(TestMDTargetPath, suffix) + "_medias"
 	err = os.RemoveAll(dirName)
 	require.Nil(t, err)
 }
@@ -61,18 +62,18 @@ func TestOBSAsyncCollector_testCollectMDWithMediasToOBS(t *testing.T) {
 	bucket, err := getBucket(testBucketName)
 	require.Nil(t, err)
 
-	md := NewMarkdownFile("", testMDPath)
+	md := collectable.NewMarkdownFile("", TestMDPath)
 	require.Nil(t, md.FileError())
 
 	obsCollectorGenerator := GetOBSCollectorGenerator(bucket)
-	obsURIMapper, err := GetOBSURIMapper(bucket)
+	obsURIMapper, err := collectable.GetOBSURIMapper(bucket)
 	require.Nil(t, err)
 	mdCollector, err := NewLocalAsyncCollector(
 		md,
-		filepath.Dir(testMDTargetPath),
-		filepath.Base(testMDTargetPath),
+		filepath.Dir(TestMDTargetPath),
+		filepath.Base(TestMDTargetPath),
 		obsURIMapper,
-		WithDependencyCollectorGenerator(obsCollectorGenerator),
+		WithDependencyGenerator(obsCollectorGenerator),
 	)
 	require.Nil(t, err)
 
@@ -81,7 +82,7 @@ func TestOBSAsyncCollector_testCollectMDWithMediasToOBS(t *testing.T) {
 		require.Nil(t, err)
 	}
 
-	err = os.Remove(testMDTargetPath)
+	err = os.Remove(TestMDTargetPath)
 	require.Nil(t, err)
 
 	objectKeyPrefix := "u_good_i_good_test_medias/img%d.png"

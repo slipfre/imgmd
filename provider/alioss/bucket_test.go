@@ -79,7 +79,7 @@ func TestBucket_PutAndRemoveObjectFromFile(t *testing.T) {
 func TestBucket_PutAndRemoveObjectFromBytes(t *testing.T) {
 	reader, err := os.Open(TestImgPath)
 	require.Nil(t, err)
-	reader.Close()
+	defer reader.Close()
 
 	bytes, err := ioutil.ReadAll(reader)
 	require.Nil(t, err)

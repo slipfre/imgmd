@@ -1,4 +1,4 @@
-package internal
+package utils
 
 import (
 	"os"
@@ -8,23 +8,23 @@ import (
 )
 
 func TestDownloader_downloadLocalFile(t *testing.T) {
-	err := DownloadFile(testImgPath, testImgTargetPath)
+	err := DownloadFile(TestImgPath, TestImgTargetPath)
 	require.Nil(t, err)
 
-	_, err = os.Stat(testImgTargetPath)
+	_, err = os.Stat(TestImgTargetPath)
 	require.Nil(t, err)
 
-	err = os.Remove(testImgTargetPath)
+	err = os.Remove(TestImgTargetPath)
 	require.Nil(t, err)
 }
 
 func TestDownloader_downloadHTTPHTTPSFile(t *testing.T) {
-	err := DownloadFile(testHTTPSrcURI, testImgTargetPath)
+	err := DownloadFile(TestHTTPSrcURI, TestImgTargetPath)
 	require.Nil(t, err)
 
-	_, err = os.Stat(testImgTargetPath)
+	_, err = os.Stat(TestImgTargetPath)
 	require.Nil(t, err)
 
-	err = os.Remove(testImgTargetPath)
+	err = os.Remove(TestImgTargetPath)
 	require.Nil(t, err)
 }

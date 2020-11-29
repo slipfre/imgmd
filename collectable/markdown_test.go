@@ -1,4 +1,4 @@
-package internal
+package collectable
 
 import (
 	"fmt"
@@ -9,40 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLeafFile(t *testing.T) {
-	var collectableFile CollectableFileOperator
-
-	collectableFile = NewLeafFile("", testImgPath)
-	require.Nil(t, collectableFile.FileError())
-	require.Equal(t, "", collectableFile.GetParent())
-	require.Equal(t, Standalone, collectableFile.GetFileType())
-	absTestImgPath, _ := filepath.Abs(testImgPath)
-	require.Equal(t, absTestImgPath, collectableFile.GetURI())
-
-	dependencies, err := collectableFile.FindDependencies()
-	require.Nil(t, err)
-	require.NotNil(t, dependencies)
-	require.Equal(t, 0, len(dependencies))
-
-	err = collectableFile.To(testImgTargetPath)
-	require.Nil(t, err)
-
-	_, err = os.Stat(testImgTargetPath)
-	require.Nil(t, err)
-
-	err = os.Remove(testImgTargetPath)
-	require.Nil(t, err)
-}
-
 func TestMarkdownFile(t *testing.T) {
-	var collectableFile CollectableFileOperator
+	var collectableFile FileOperator
 
-	collectableFile = NewMarkdownFile("", testMDPath)
+	collectableFile = NewMarkdownFile("", TestMDPath)
 	require.Nil(t, collectableFile.FileError())
 	require.Equal(t, "", collectableFile.GetParent())
 	require.Equal(t, Markdown, collectableFile.GetFileType())
 
-	expectMDURI, err := filepath.Abs(testMDPath)
+	expectMDURI, err := filepath.Abs(TestMDPath)
 	require.Nil(t, err)
 	require.Equal(t, expectMDURI, collectableFile.GetURI())
 
@@ -86,10 +61,10 @@ func TestMarkdownFile(t *testing.T) {
 		require.Equal(t, expectDependencyURI, dependency.GetURI())
 	}
 
-	err = collectableFile.To(testMDTargetPath)
+	err = collectableFile.To(TestMDTargetPath)
 	require.Nil(t, err)
 
-	_, err = os.Stat(testMDTargetPath)
+	_, err = os.Stat(TestMDTargetPath)
 	require.Nil(t, err)
 
 	for i := 1; i <= 13; i++ {
@@ -97,6 +72,6 @@ func TestMarkdownFile(t *testing.T) {
 		require.Nil(t, err)
 	}
 
-	err = os.Remove(testMDTargetPath)
+	err = os.Remove(TestMDTargetPath)
 	require.Nil(t, err)
 }
