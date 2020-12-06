@@ -7,7 +7,6 @@ import (
 	"reflect"
 
 	"github.com/slipfre/imgmd/collectable"
-	"github.com/slipfre/imgmd/provider"
 	"github.com/slipfre/imgmd/utils"
 )
 
@@ -26,20 +25,23 @@ type AsyncCollector struct {
 
 func defaultCollectorConfigs() *Configs {
 	configs := &Configs{
-		Force:                 false,
-		DepCollectorGenerator: LocalCollectorGenerator,
+		Force: false,
 	}
 	return configs
 }
 
 // NewAsyncCollector Constructor for NewAsyncCollector
-func NewAsyncCollector(cf collectable.FileOperator, base, objectKey string, freshValidator FreshValidator, mover Mover, depURIMapper collectable.URIMapper, options ...Option) (*AsyncCollector, error) {
+func NewAsyncCollector(cf collectable.FileOperator, base, objectKey string, freshValidator FreshValidator, mover Mover, depURIMapper collectable.URIMapper, depCollectorGenerator Generator, options ...Option) (*AsyncCollector, error) {
 	if freshValidator == nil {
-		return nil, errors.New("'IsNeedCollectValidator' should not be nil")
+		return nil, errors.New("'FreshValidator' should not be nil")
 	}
 
 	if mover == nil {
 		return nil, errors.New("'Mover' should not be nil")
+	}
+
+	if depCollectorGenerator == nil {
+		return nil, errors.New("'Generator' should not be nil")
 	}
 
 	configs := defaultCollectorConfigs()
@@ -56,7 +58,7 @@ func NewAsyncCollector(cf collectable.FileOperator, base, objectKey string, fres
 		freshValidator:        freshValidator,
 		depURIMapper:          depURIMapper,
 		mover:                 mover,
-		depCollectorGenerator: configs.DepCollectorGenerator,
+		depCollectorGenerator: depCollectorGenerator,
 		force:                 configs.Force,
 	}, nil
 }
@@ -108,7 +110,11 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 		cases := make([]reflect.SelectCase, len(deps))
 		for i, dep := range deps {
 			depObjKey := filepath.Join(depObjDir, filepath.Base(dep.GetURI()))
-			collector, err := c.depCollectorGenerator(dep, c.base, depObjKey, c.depURIMapper, WithForce(c.force))
+			collector, err := c.depCollectorGenerator(
+				dep, c.base, depObjKey,
+				c.depCollectorGenerator,
+				WithForce(c.force),
+			)
 			if err != nil {
 				cancel()
 				complete <- err
@@ -142,32 +148,4 @@ func (c *AsyncCollector) collectFileAsync(ctx context.Context, complete chan<- e
 	}
 
 	complete <- nil
-}
-
-// NewLocalAsyncCollector Return a AsyncCollector which collect the file to
-// local place
-func NewLocalAsyncCollector(cf collectable.FileOperator, base, objectKey string, depURIMapper collectable.URIMapper, options ...Option) (*AsyncCollector, error) {
-	collector, err := NewAsyncCollector(
-		cf, base, objectKey, LocalFileFreshValidator, LocalMover, depURIMapper, options...)
-	if err != nil {
-		return nil, err
-	}
-	return collector, nil
-}
-
-// NewOBSAsyncCollector Returns a AsyncCollector which collect the file to OBS
-func NewOBSAsyncCollector(bucket provider.Bucket, cf collectable.FileOperator, base, objectKey string, depURIMapper collectable.URIMapper, options ...Option) (*AsyncCollector, error) {
-	validator, err := GetOBSFileFreshValidator(bucket)
-	if err != nil {
-		return nil, err
-	}
-	mover, err := GetOBSMover(bucket)
-	if err != nil {
-		return nil, err
-	}
-	collector, err := NewAsyncCollector(cf, base, objectKey, validator, mover, depURIMapper, options...)
-	if err != nil {
-		return nil, err
-	}
-	return collector, nil
 }

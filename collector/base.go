@@ -18,7 +18,7 @@ type FreshValidator func(cf collectable.FileOperator, base, objectKey string) (b
 type Mover func(cf collectable.FileOperator, base, objectKey string) error
 
 // Generator Generate collectors
-type Generator func(cf collectable.FileOperator, base, objectKey string, depURIMapper collectable.URIMapper, options ...Option) (Collector, error)
+type Generator func(cf collectable.FileOperator, base, objectKey string, depGenerator Generator, options ...Option) (Collector, error)
 
 // Configs Configurations for collector
 type Configs struct {
@@ -34,12 +34,5 @@ type Option func(configs *Configs)
 func WithForce(force bool) Option {
 	return func(configs *Configs) {
 		configs.Force = force
-	}
-}
-
-// WithDependencyGenerator Option config for collectors
-func WithDependencyGenerator(generator Generator) Option {
-	return func(configs *Configs) {
-		configs.DepCollectorGenerator = generator
 	}
 }

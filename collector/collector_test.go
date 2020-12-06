@@ -18,11 +18,11 @@ func TestAsyncCollector_testCollect(t *testing.T) {
 	md := collectable.NewMarkdownFile("", TestMDPath)
 	require.Nil(t, md.FileError())
 
-	mdCollector, err := NewLocalAsyncCollector(
+	mdCollector, err := LocalCollectorGenerator(
 		md,
 		filepath.Dir(TestMDTargetPath),
 		filepath.Base(TestMDTargetPath),
-		collectable.LocalURIMapper,
+		LocalCollectorGenerator,
 	)
 	require.Nil(t, err)
 
@@ -65,15 +65,12 @@ func TestOBSAsyncCollector_testCollectMDWithMediasToOBS(t *testing.T) {
 	md := collectable.NewMarkdownFile("", TestMDPath)
 	require.Nil(t, md.FileError())
 
-	obsCollectorGenerator := GetOBSCollectorGenerator(bucket)
-	obsURIMapper, err := collectable.GetOBSURIMapper(bucket)
 	require.Nil(t, err)
-	mdCollector, err := NewLocalAsyncCollector(
+	mdCollector, err := LocalCollectorGenerator(
 		md,
 		filepath.Dir(TestMDTargetPath),
 		filepath.Base(TestMDTargetPath),
-		obsURIMapper,
-		WithDependencyGenerator(obsCollectorGenerator),
+		GetOBSCollectorGenerator(bucket),
 	)
 	require.Nil(t, err)
 
