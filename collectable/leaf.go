@@ -16,7 +16,7 @@ type LeafFile struct {
 	*FileAttrs
 }
 
-// NewLeafFile 创建一个 StandaloneCollector，它可以 collect 没有依赖项的文件
+// NewLeafFile 创建一个 LeafCollector，它可以 collect 没有依赖项的文件
 func NewLeafFile(parent, uri string) *LeafFile {
 	reader, fError := utils.NewFileReader(uri)
 	defer reader.Close()
@@ -37,7 +37,7 @@ func NewLeafFile(parent, uri string) *LeafFile {
 	}
 
 	return &LeafFile{
-		FileAttrs: NewFileAttrs(parent, uri, Standalone, updatedTimePtr, fError),
+		FileAttrs: NewFileAttrs(parent, uri, Leaf, updatedTimePtr, fError),
 	}
 }
 

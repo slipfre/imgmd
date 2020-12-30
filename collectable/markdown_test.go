@@ -29,7 +29,7 @@ func TestMarkdownFile(t *testing.T) {
 	tempMDImgURIPrefix := "../resources/u_good_i_good_imgs/temp_%s"
 	for i, dependency := range dependencies {
 		require.Equal(t, expectMDURI, dependency.GetParent())
-		require.Equal(t, Standalone, dependency.GetFileType())
+		require.Equal(t, Leaf, dependency.GetFileType())
 
 		expectDependencyURI, err := filepath.Abs(fmt.Sprintf(dependencyURIPrefix, i+1))
 		require.Nil(t, err)
@@ -54,7 +54,7 @@ func TestMarkdownFile(t *testing.T) {
 	require.Nil(t, err)
 	for i, dependency := range dependencies {
 		require.Equal(t, expectMDURI, dependency.GetParent())
-		require.Equal(t, Standalone, dependency.GetFileType())
+		require.Equal(t, Leaf, dependency.GetFileType())
 
 		expectDependencyURI, err := filepath.Abs(fmt.Sprintf(newDependencyURIPrefix, i+1))
 		require.Nil(t, err)

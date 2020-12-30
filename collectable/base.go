@@ -52,8 +52,8 @@ func NewFileAttrs(parent, uri string, fileType FileType, updatedTime *time.Time,
 type FileType string
 
 const (
-	// Standalone Stand for collectable files with no dependencies
-	Standalone FileType = "standalone"
+	// Leaf Stand for collectable files with no dependencies
+	Leaf FileType = "leaf"
 	// Markdown Stand for Markdown files
 	Markdown FileType = "markdown"
 	// None Stand for a file which is not exist

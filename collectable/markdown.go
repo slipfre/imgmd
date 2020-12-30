@@ -76,6 +76,7 @@ func (m *MarkdownFile) FindDependencies() ([]FileOperator, error) {
 	for _, match := range matchs {
 		path := string(match[2])
 		if !filepath.IsAbs(path) {
+			// TODO: what if path is a http or https url
 			path = filepath.Join(filepath.Dir(m.uri), path)
 		}
 
@@ -95,7 +96,7 @@ func (m *MarkdownFile) ReplaceDependencyURIs(base, objectKey string, mapper URIM
 		m.buffer,
 		func(match []byte) []byte {
 			subMatchs := GetMarkdownImgRegex().FindSubmatch(match)
-			newURI := mapper(Standalone, subMatchs[2], base, objectKey)
+			newURI := mapper(Leaf, subMatchs[2], base, objectKey)
 			return bytes.Replace(subMatchs[0], subMatchs[2], newURI, 1)
 		},
 	)
