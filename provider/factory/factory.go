@@ -1,8 +1,9 @@
-package provider
+package factory
 
 import (
 	"fmt"
 
+	"github.com/slipfre/imgmd/provider"
 	"github.com/slipfre/imgmd/provider/alioss"
 )
 
@@ -15,10 +16,10 @@ const (
 )
 
 // ObtainClient 获取 Client
-func ObtainClient(provider Provider, akid, aks, endpoint string) (Client, error) {
+func ObtainClient(provider Provider, akid, aks, endpoint string) (provider.Client, error) {
 	switch provider {
 	case ALI:
-		return alioss.NewClient(endpoint, akid, aks), nil
+		return alioss.NewClient(endpoint, akid, aks)
 	}
 	return nil, fmt.Errorf("unsupported provider: '%s'", provider)
 }

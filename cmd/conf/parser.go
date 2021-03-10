@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/slipfre/imgmd/provider"
+	"github.com/slipfre/imgmd/provider/factory"
 	"github.com/spf13/viper"
 )
 
@@ -19,7 +20,7 @@ func GetBucketFromConfigFile(path string) (bucket provider.Bucket, err error) {
 		err = errors.New("'OBS' not found in config file")
 		return
 	}
-	client, err := provider.ObtainClient(provider.Provider(obs["PROVIDER"]), obs["AKID"], obs["AKS"], obs["ENDPOINT"])
+	client, err := factory.ObtainClient(factory.Provider(obs["PROVIDER"]), obs["AKID"], obs["AKS"], obs["ENDPOINT"])
 	if err != nil {
 		return
 	}

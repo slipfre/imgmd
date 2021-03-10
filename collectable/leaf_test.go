@@ -14,7 +14,7 @@ func TestLeafFile(t *testing.T) {
 	collectableFile = NewLeafFile("", TestImgPath)
 	require.Nil(t, collectableFile.FileError())
 	require.Equal(t, "", collectableFile.GetParent())
-	require.Equal(t, Standalone, collectableFile.GetFileType())
+	require.Equal(t, Leaf, collectableFile.GetFileType())
 	absTestImgPath, _ := filepath.Abs(TestImgPath)
 	require.Equal(t, absTestImgPath, collectableFile.GetURI())
 
