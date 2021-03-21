@@ -11,7 +11,6 @@ import (
 // GetBucketFromConfigFile 解析配置文件
 func GetBucketFromConfigFile(path string) (bucket provider.Bucket, err error) {
 	viper.SetConfigFile(path)
-	viper.SetConfigFile("yaml")
 	if err = viper.ReadInConfig(); err != nil {
 		return
 	}
@@ -20,15 +19,15 @@ func GetBucketFromConfigFile(path string) (bucket provider.Bucket, err error) {
 		err = errors.New("'OBS' not found in config file")
 		return
 	}
-	client, err := factory.ObtainClient(factory.Provider(obs["PROVIDER"]), obs["AKID"], obs["AKS"], obs["ENDPOINT"])
+	client, err := factory.ObtainClient(factory.Provider(obs["provider"]), obs["akid"], obs["aks"], obs["endpoint"])
 	if err != nil {
 		return
 	}
-	bucket, err = client.GetOrCreateBucket(obs["BUCKET"])
+	bucket, err = client.GetOrCreateBucket(obs["bucket"])
 	if err != nil {
 		return
 	}
-	repo := viper.GetStringMapString("REPOSITORY")
+	repo := viper.GetStringMapString("repository")
 	if repo == nil {
 		err = errors.New("'REPOSITORY' not found in config file")
 		return
@@ -39,13 +38,15 @@ func GetBucketFromConfigFile(path string) (bucket provider.Bucket, err error) {
 // GetRepoPathFromConfig 获取 Repository 的路径
 func GetRepoPathFromConfig(path string) (repoPath string, err error) {
 	viper.SetConfigFile(path)
-	viper.SetConfigFile("yaml")
-	repo := viper.GetStringMapString("REPOSITORY")
-	if repo == nil {
-		err = errors.New("'OBS' not found in config file")
+	if err = viper.ReadInConfig(); err != nil {
 		return
 	}
-	repoPath = repo["PATH"]
+	repo := viper.GetStringMapString("REPOSITORY")
+	if repo == nil {
+		err = errors.New("'REPOSITORY' not found in config file")
+		return
+	}
+	repoPath = repo["path"]
 	if repoPath == "" {
 		err = errors.New("'PATH' of repository not config or is empty")
 		return

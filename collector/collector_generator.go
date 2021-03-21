@@ -52,3 +52,16 @@ func GetPartOBSCollectorGenerator(bucket provider.Bucket, types map[collectable.
 		return LocalCollectorGenerator(cf, base, objectKey, generator, options...)
 	}
 }
+
+// GetLocalCollectorGenerator Returns a collector generator which collect to
+// local and collect dependencies to obs
+func GetLocalCollectorGenerator(urimapper collectable.URIMapper) Generator {
+	return func(cf collectable.FileOperator, base, objectKey string, generator Generator, options ...Option) (Collector, error) {
+		collector, err := NewAsyncCollector(
+			cf, base, objectKey, LocalFileFreshValidator, LocalMover, urimapper, generator, options...)
+		if err != nil {
+			return nil, err
+		}
+		return collector, nil
+	}
+}
